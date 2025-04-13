@@ -46,6 +46,7 @@ function Home() {
   const [tempStartTime, setTempStartTime] = useState<number | null>(null)
   const [isUrlCopied, setIsUrlCopied] = useState(false)
   const [isPlaying, setIsPlaying] = React.useState(false)
+  const [isMirrored, setIsMirrored] = React.useState(false)
 
   const seekBackward = () => {
     if (!player) return
@@ -75,6 +76,10 @@ function Home() {
 
   const toggleTheme = () => {
     setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
+  };
+
+  const toggleMirror = () => {
+    setIsMirrored(prev => !prev);
   };
 
   const presetSpeeds = [0.5, 0.75, 1.0]
@@ -421,7 +426,10 @@ function Home() {
             <YouTube
               videoId={videoId}
               opts={opts}
-              iframeClassName="absolute top-0 left-0 w-full h-full"
+              iframeClassName={cn(
+                "absolute top-0 left-0 w-full h-full",
+                isMirrored && "transform scale-x-[-1]"
+              )}
               className=""
               onReady={onPlayerReady}
               onStateChange={onPlayerStateChange}
@@ -654,6 +662,16 @@ function Home() {
 
           <div className="space-y-1 flex-shrink-0">
             <Label htmlFor="playback-speed-slider" className="text-xs font-normal text-muted-foreground">Misc.</Label>
+            <Button
+              onClick={toggleMirror}
+              disabled={!videoId}
+              className="w-full font-normal"
+              variant={isMirrored ? "default" : "outline"}
+              size="sm"
+              style={{ boxShadow: 'none' }}
+            >
+              {isMirrored ? 'Unmirror Video' : 'Mirror Video'}
+            </Button>
             <Button
               onClick={handleCopyUrl}
               disabled={!videoId || sections.length === 0}
