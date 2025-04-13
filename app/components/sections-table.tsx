@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/tooltip"
 import { Kbd } from "@/components/ui/kbd"
 
-// Define the shape of a loop section
 export type Section = {
   id: string;
   name: string;
@@ -38,7 +37,6 @@ export type Section = {
   endTime: number | null;
 };
 
-// Declare module augmentation for table meta
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
     activeLoopSectionId: string | null;
@@ -55,7 +53,6 @@ declare module "@tanstack/react-table" {
   }
 }
 
-// Define approximate column widths (6 columns now)
 const activeWidth = "50px";
 const playWidth = "30px";
 const nameWidth = "25%";
@@ -63,7 +60,6 @@ const startTimeWidth = "25%";
 const endTimeWidth = "25%";
 const deleteWidth = "20px";
 
-// Define table columns in the new order
 const sectionColumns: ColumnDef<Section>[] = [
   {
     id: "active",
@@ -188,7 +184,6 @@ const sectionColumns: ColumnDef<Section>[] = [
   },
 ];
 
-// Define props for the table component
 export interface SectionsTableProps {
   sections: Section[];
   activeLoopSectionId: string | null;
@@ -311,7 +306,7 @@ export function SectionsTable({
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-xs text-center">
               <p>
-                Click to add a new empty section, or use <Kbd>[</Kbd> to mark start/end times.
+                Click to add a new empty section. Tip: add new sections with <Kbd>[</Kbd> by marking start/end times.
               </p>
             </TooltipContent>
           </Tooltip>

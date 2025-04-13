@@ -1,6 +1,4 @@
-import * as fs from 'node:fs'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { createServerFn } from '@tanstack/react-start'
 import * as React from 'react'
 import YouTube from 'react-youtube'
 import { Input } from '@/components/ui/input'
@@ -12,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { SpeedInput } from '@/components/ui/speed-input'
 import { SectionsTable, Section } from "@/components/sections-table"
 import { nanoid } from 'nanoid'
-import { PanelRightClose, PanelRightOpen, Moon, Sun } from 'lucide-react'
+import { PanelRightClose, PanelRightOpen, Moon, Sun, Space } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   Tooltip,
@@ -21,25 +19,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Kbd } from '@/components/ui/kbd'
-
-const filePath = 'count.txt'
-
-async function readCount() {
-  return parseInt(
-    await fs.promises.readFile(filePath, 'utf-8').catch(() => '0'),
-  )
-}
-
-const getCount = createServerFn({ method: 'GET' }).handler(() => {
-  return readCount()
-})
-
-const updateCount = createServerFn({ method: 'POST' })
-  .validator((addBy: number) => addBy)
-  .handler(async ({ data }) => {
-    const count = await readCount()
-    await fs.promises.writeFile(filePath, `${count + data}`)
-  })
+import { toast } from 'sonner'
 
 export const Route = createFileRoute('/')({
   component: Home,
@@ -47,27 +27,43 @@ export const Route = createFileRoute('/')({
 
 function Home() {
   const router = useRouter()
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   const [youtubeUrl, setYoutubeUrl] = React.useState('')
   const [playbackRate, setPlaybackRate] = React.useState(1)
   const [player, setPlayer] = React.useState<YouTubePlayer | null>(null)
   const [theme, setTheme] = React.useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined') return 'light'; // Default for SSR
+    if (typeof window === 'undefined') return 'light';
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     if (savedTheme) return savedTheme;
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
-  // Initialize sections potentially from URL params
   const [sections, setSections] = React.useState<Section[]>([])
   const [activeLoopSectionId, setActiveLoopSectionId] = React.useState<string | null>(null)
   const loopIntervalRef = React.useRef<NodeJS.Timeout | null>(null)
   const [isControlsVisible, setIsControlsVisible] = useState(true)
   const [tempStartTime, setTempStartTime] = useState<number | null>(null)
   const [isUrlCopied, setIsUrlCopied] = useState(false)
-  const controlsPanelWidth = '30%'
+  const [isPlaying, setIsPlaying] = React.useState(false)
 
-  // Effect to apply the theme class to HTML element
+  const seekBackward = () => {
+    if (!player) return
+    const currentTime = player.getCurrentTime()
+    player.seekTo(Math.max(0, currentTime - 5), true)
+  }
+
+  const seekForward = () => {
+    if (!player) return
+    const currentTime = player.getCurrentTime()
+    player.seekTo(currentTime + 5, true)
+  }
+
+  const seekToStart = () => {
+    if (!player) return;
+    player.seekTo(0, true);
+  }
+
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
         const root = window.document.documentElement;
@@ -83,7 +79,6 @@ function Home() {
 
   const presetSpeeds = [0.5, 0.75, 1.0]
 
-  // Basic regex to extract video ID from various YouTube URL formats
   const videoId = React.useMemo(() => {
     const url = youtubeUrl.trim()
     if (!url) return ''
@@ -97,7 +92,6 @@ function Home() {
     width: '100%',
     height: '100%',
     playerVars: {
-      // https://developers.google.com/youtube/player_parameters
       autoplay: 0,
     },
   }
@@ -107,7 +101,10 @@ function Home() {
     event.target.setPlaybackRate(playbackRate)
   }
 
-  // --- Speed Handlers ---
+  const onPlayerStateChange = (event: { data: number }) => {
+    setIsPlaying(event.data === 1)
+  }
+
   const updatePlaybackRate = (newRate: number) => {
     const clampedRate = Math.max(0.25, Math.min(2, newRate))
     const finalRate = parseFloat(clampedRate.toFixed(2))
@@ -119,7 +116,6 @@ function Home() {
     updatePlaybackRate(value[0])
   }
 
-  // --- Sections Table Handlers ---
   const addSection = (startTime: number | null = null, endTime: number | null = null) => {
     setSections((prev) => [
       ...prev,
@@ -130,7 +126,7 @@ function Home() {
   const deleteSection = (sectionId: string) => {
     setSections((prev) => prev.filter((s) => s.id !== sectionId))
     if (activeLoopSectionId === sectionId) {
-      setActiveLoopSectionId(null) // Deactivate if deleting active loop
+      setActiveLoopSectionId(null)
     }
   }
 
@@ -161,20 +157,6 @@ function Home() {
     }
   }
 
-  // --- Position Handlers (Now independent of specific loop state) ---
-  const seekBackward = () => {
-    if (!player) return
-    const currentTime = player.getCurrentTime()
-    player.seekTo(Math.max(0, currentTime - 5), true)
-  }
-
-  const seekForward = () => {
-    if (!player) return
-    const currentTime = player.getCurrentTime()
-    player.seekTo(currentTime + 5, true)
-  }
-
-  // --- Effect for Active Loop Logic ---
   React.useEffect(() => {
     if (loopIntervalRef.current) {
       clearInterval(loopIntervalRef.current)
@@ -201,98 +183,76 @@ function Home() {
         loopIntervalRef.current = null
       }
     }
-  }, [activeLoopSectionId, sections, player]) // Rerun when active loop or sections change
+  }, [activeLoopSectionId, sections, player])
 
-  // --- Effect to Load State from URL ---
   React.useEffect(() => {
-    // Use URLSearchParams to safely get parameters
     const searchParams = new URLSearchParams(router.state.location.searchStr);
     const videoParam = searchParams.get('v');
     const sectionsParam = searchParams.get('s');
 
-    let loadedFromUrl = false; // Flag to track if we loaded anything
+    let loadedFromUrl = false;
 
-    // Load video from 'v' parameter
     if (videoParam) {
-      console.log("Loading video from URL param: ", videoParam);
       setYoutubeUrl(`https://www.youtube.com/watch?v=${videoParam}`);
       loadedFromUrl = true;
     }
 
-    // Load sections from 's' parameter
     if (sectionsParam) {
-      console.log("Loading sections from URL param...");
       try {
-        const decodedJson = atob(sectionsParam); // Decode Base64
-        const parsedSections = JSON.parse(decodedJson); // Parse JSON
+        const decodedJson = atob(sectionsParam);
+        const parsedSections = JSON.parse(decodedJson);
 
-        // Basic validation: check if it's an array
         if (Array.isArray(parsedSections)) {
-          // Further validation could check section structure
-          console.log("Successfully parsed sections:", parsedSections);
           setSections(parsedSections);
           loadedFromUrl = true;
         } else {
           console.error("Parsed sections data is not an array:", parsedSections);
-          // Don't set defaults here yet, wait till the end
         }
       } catch (error) {
         console.error("Failed to decode/parse sections from URL:", error);
-        // Don't set defaults here yet, wait till the end
       }
     }
 
-    // Only set default sections if NOTHING was loaded from the URL
     if (!loadedFromUrl) {
       setDefaultSections();
     }
+  }, [router.state.location.searchStr]);
 
-  }, [router.state.location.searchStr]); // Use searchStr in dependency array
-
-  // Helper to set default sections if URL loading fails or no params given
   const setDefaultSections = () => {
-      console.log("Setting default sections.")
       setSections([
-        { id: nanoid(), name: "Solo 1", startTime: 164, endTime: 237 },
         { id: nanoid(), name: "Run 1", startTime: 241, endTime: 261 },
         { id: nanoid(), name: "Run 2", startTime: 262, endTime: 269.3 },
       ]);
-      // Also set default video if none loaded from URL
       if (!youtubeUrl) {
           setYoutubeUrl('https://www.youtube.com/watch?v=DYHng61lftA');
       }
   };
 
-  // --- Effect for Keyboard Shortcuts ---
   useEffect(() => {
-    // Map QWERTY keys to section indices (0-9)
     const keyToSectionIndexMap: { [key: string]: number } = {
         Q: 0, W: 1, E: 2, R: 3, T: 4,
         Y: 5, U: 6, I: 7, O: 8, P: 9,
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Ignore if modifier keys are pressed
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
         return;
       }
 
-      // Ignore if typing in an input field
       const target = event.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
 
       const key = parseInt(event.key, 10);
-      const upperKey = event.key.toUpperCase(); // Use uppercase for mapping
-      const lowerKey = event.key.toLowerCase(); // Use lowercase for mapping
+      const upperKey = event.key.toUpperCase();
+      const lowerKey = event.key.toLowerCase();
 
       if (!isNaN(key) && key >= 1 && key <= 9) {
         const sectionIndex = key - 1;
         if (sectionIndex < sections.length) {
           const targetSection = sections[sectionIndex];
           if (player && targetSection.startTime !== null) {
-            console.log(`Seeking to start of Section ${key} (${targetSection.name}) at ${targetSection.startTime} and activating loop.`);
             player.seekTo(targetSection.startTime, true);
             setActiveLoopSectionId(targetSection.id);
             player.playVideo();
@@ -300,41 +260,44 @@ function Home() {
         }
       }
        else if (event.key === ' ') {
-         event.preventDefault(); // Prevent page scroll
+         event.preventDefault();
          if (player) {
            const state = player.getPlayerState();
-           if (state === 1) { // Playing
+           if (state === 1) {
              player.pauseVideo();
-           } else { // Paused, ended, cued, etc.
+           } else {
              player.playVideo();
            }
          }
        }
-       // --- New Shortcut Logic for '[' ---
        else if (event.key === '[') {
-           event.preventDefault(); // Prevent typing bracket if not in input
+           event.preventDefault();
            if (!player) return;
 
            const currentTime = parseFloat(player.getCurrentTime().toFixed(2));
+           const formattedTime = formatTime(currentTime);
 
            if (tempStartTime === null) {
-               // First press: Record start time
                setTempStartTime(currentTime);
-               console.log(`Section Start marked at: ${formatTime(currentTime)}`);
-               // TODO: Add visual feedback?
+               toast("Recorded section start time", {
+                   description: `Time: ${formattedTime}`
+               });
            } else {
-               // Second press: Record end time and create section
                const endTime = currentTime;
+               const formattedStartTime = formatTime(tempStartTime);
                if (endTime > tempStartTime) {
-                   console.log(`Section End marked at: ${formatTime(endTime)}, creating section.`);
-                   addSection(tempStartTime, endTime); // Create section with times
+                   addSection(tempStartTime, endTime);
+                   toast("Recorded section end time. Added new section.", {
+                       description: `Section: ${formattedStartTime} - ${formattedTime}`
+                   });
                } else {
-                   console.log("End time must be after start time. Resetting mark.");
+                   toast.error("End time must be after start time", {
+                       description: `Start time was ${formattedStartTime}`
+                   });
                }
-               setTempStartTime(null); // Reset marker
+               setTempStartTime(null);
            }
        }
-       // --- New Shortcut Logic for QWERTYUIOP (seek end) ---
        else if (upperKey in keyToSectionIndexMap) {
            event.preventDefault();
            const sectionIndex = keyToSectionIndexMap[upperKey];
@@ -342,78 +305,117 @@ function Home() {
            if (sectionIndex < sections.length) {
                const targetSection = sections[sectionIndex];
                if (player && targetSection.endTime !== null) {
-                   console.log(`Seeking to end of Section ${sectionIndex + 1} (${targetSection.name}) at ${formatTime(targetSection.endTime)} and deactivating loop.`);
                    player.seekTo(targetSection.endTime, true);
-                   setActiveLoopSectionId(null); // Deactivate loop
+                   setActiveLoopSectionId(null);
                }
            }
        }
-       // --- New Shortcut Logic for Speed Control ---
        else if (event.key === '-') {
            event.preventDefault();
            updatePlaybackRate(playbackRate - 0.05);
        }
-       else if (event.key === '=') { // Usually shares key with +
+       else if (event.key === '=') {
            event.preventDefault();
            updatePlaybackRate(playbackRate + 0.05);
        }
-       // --- New Shortcut Logic for 0 key (seek to start) ---
        else if (event.key === '0') {
             event.preventDefault();
             if (player) {
-                console.log("Seeking to video start (0:00).");
                 player.seekTo(0, true);
-                // Also play if paused
-                if (player.getPlayerState() !== 1) { // 1 === PLAYING
+                if (player.getPlayerState() !== 1) {
                     player.playVideo();
                 }
             }
        }
-       // --- Shortcut for toggling Controls Visibility ---
        else if (lowerKey === 'b') {
             event.preventDefault();
             setIsControlsVisible(prev => !prev);
        }
-       // --- Shortcut for toggling Theme ---
        else if (lowerKey === 'm') {
             event.preventDefault();
             toggleTheme();
+       }
+       else if (event.key === 'ArrowLeft') {
+           event.preventDefault();
+           seekBackward();
+       }
+       else if (event.key === 'ArrowRight') {
+           event.preventDefault();
+           seekForward();
        }
     };
 
     window.addEventListener('keydown', handleKeyDown);
 
-    // Cleanup listener on component unmount
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [player, sections, setActiveLoopSectionId, tempStartTime, setTempStartTime, playbackRate, setIsControlsVisible, toggleTheme]);
 
-  // --- Copy URL Logic ---
+  React.useEffect(() => {
+    const containerElement = containerRef.current;
+    if (!containerElement) return;
+
+    const handleResize = () => {
+      const screenWidth = window.innerWidth;
+
+      if (screenWidth >= 640 && screenWidth < 1200) {
+        const scale = screenWidth / 1200;
+        containerElement.style.transform = `scale(${scale})`;
+        containerElement.style.transformOrigin = 'top left';
+        containerElement.style.width = '1200px';
+        containerElement.style.height = `calc(100vh / ${scale})`;
+        document.body.style.overflow = 'hidden';
+      } else {
+        containerElement.style.transform = '';
+        containerElement.style.transformOrigin = '';
+        containerElement.style.width = '';
+        containerElement.style.height = '';
+        document.body.style.overflow = '';
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (containerElement) {
+          containerElement.style.transform = '';
+          containerElement.style.transformOrigin = '';
+          containerElement.style.width = '';
+          containerElement.style.height = '';
+      }
+      document.body.style.overflow = '';
+    };
+  }, []);
+
   const handleCopyUrl = () => {
-    if (!videoId) return; // Don't copy if no video
+    if (!videoId) return;
 
     try {
       const sectionsJson = JSON.stringify(sections);
-      const encodedSections = btoa(sectionsJson); // Base64 encode
+      const encodedSections = btoa(sectionsJson);
       const shareUrl = `${window.location.origin}${window.location.pathname}?v=${videoId}&s=${encodedSections}`;
 
       navigator.clipboard.writeText(shareUrl).then(() => {
         setIsUrlCopied(true);
-        setTimeout(() => setIsUrlCopied(false), 2000); // Reset feedback after 2 seconds
+        setTimeout(() => setIsUrlCopied(false), 2000);
       }).catch(err => {
         console.error("Failed to copy URL: ", err);
-        // Optionally show an error message to the user
       });
     } catch (error) {
       console.error("Error generating share URL:", error);
-      // Handle potential errors during stringify/btoa
     }
   };
 
   return (
-    <div className="relative flex h-screen w-screen bg-background text-foreground">
-      <div className="flex-grow p-4 flex justify-center items-center">
+    <div
+      ref={containerRef}
+      className="relative flex flex-col sm:flex-row h-screen w-screen bg-background text-foreground overflow-hidden"
+    >
+      {/* Video Area */}
+      <div className="w-full sm:flex-grow p-4 flex justify-center items-center relative">
         <div className="relative w-full aspect-video max-w-full">
           {videoId ? (
             <YouTube
@@ -422,6 +424,7 @@ function Home() {
               iframeClassName="absolute top-0 left-0 w-full h-full"
               className=""
               onReady={onPlayerReady}
+              onStateChange={onPlayerStateChange}
             />
           ) : (
             <div className="absolute top-0 left-0 w-full h-full bg-gray-200 flex items-center justify-center text-gray-500 rounded">
@@ -429,59 +432,67 @@ function Home() {
             </div>
           )}
         </div>
+
+        <div className="hidden sm:block">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsControlsVisible(!isControlsVisible)}
+                    className={cn(
+                      "absolute top-2 right-2 h-7 w-7 z-20 transition-opacity duration-300 ease-in-out"
+                    )}
+                  >
+                    {isControlsVisible ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+                  </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isControlsVisible ? "Hide Controls" : "Show Controls"} <Kbd className="ml-1">B</Kbd></p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
+        <div className="hidden sm:block">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleTheme}
+                  className={cn(
+                    "absolute bottom-2 right-2 h-7 w-7 z-20 transition-opacity duration-300 ease-in-out"
+                  )}
+                >
+                  {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                  <span className="sr-only">Toggle theme</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Toggle {theme === 'light' ? 'Dark' : 'Light'} Mode <Kbd className="ml-1">M</Kbd></p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
       </div>
-
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsControlsVisible(!isControlsVisible)}
-                className="absolute top-2 h-7 w-7 z-20 transition-[right] duration-300 ease-in-out"
-                style={{
-                  right: isControlsVisible ? `calc(${controlsPanelWidth} + 0.5rem)` : '0.5rem'
-                }}
-              >
-                {isControlsVisible ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-              </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-             <p>{isControlsVisible ? "Hide Controls" : "Show Controls"} <Kbd className="ml-1">B</Kbd></p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="absolute bottom-2 h-7 w-7 z-20 transition-[right] duration-300 ease-in-out"
-              style={{
-                right: isControlsVisible ? `calc(${controlsPanelWidth} + 0.5rem)` : '0.5rem'
-              }}
-            >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              <span className="sr-only">Toggle theme</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Toggle {theme === 'light' ? 'Dark' : 'Light'} Mode <Kbd className="ml-1">M</Kbd></p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
 
       <div
         className={cn(
-            "flex flex-col justify-start pt-8 space-y-4 overflow-y-auto transition-[width,padding] duration-300 ease-in-out border-l border-border",
-            isControlsVisible ? "w-3/10 p-4" : "w-0 p-0 border-l-0"
+            // Base mobile styles (always applied):
+            "w-full flex flex-col justify-start space-y-4 overflow-y-auto p-4 border-t sm:border-t-0 sm:border-l border-border",
+            // Desktop transition styles (apply sm and up):
+            "sm:pt-8 sm:transition-[width,padding] sm:duration-300 sm:ease-in-out",
+            // Desktop visibility logic (apply sm and up):
+            isControlsVisible
+              ? "sm:w-2/5 sm:p-4"
+              : "sm:w-0 sm:p-0 sm:border-l-0"
         )}
-        style={{ width: isControlsVisible ? controlsPanelWidth : '0' }}
       >
-        <div className={cn("flex flex-col space-y-8", !isControlsVisible && "hidden")}>
+        <div className="flex flex-col space-y-8">
           <div className="space-y-1 flex-shrink-0">
             <Label htmlFor="youtube-url" className="text-xs font-normal text-muted-foreground">YouTube URL</Label>
             <Input
@@ -518,7 +529,7 @@ function Home() {
                 className="h-8"
               />
             </div>
-            <div className="flex flex-wrap gap-1 pt-1">
+            <div className="flex flex-wrap gap-1">
               {presetSpeeds.map((speed) => (
                 <Button
                   key={speed}
@@ -549,16 +560,121 @@ function Home() {
                addSection={addSection}
                playSection={playSection}
             />
+          </div>
+
+          <div className="space-y-1 flex-shrink-0">
+            <Label htmlFor="playback-speed-slider" className="text-xs font-normal text-muted-foreground">Playback Controls</Label>
+            <div className="flex gap-1">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        style={{ boxShadow: 'none' }}
+                        onClick={seekToStart}
+                        disabled={!player}
+                        className="flex-1 font-normal"
+                    >
+                        Video Start
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                      <p>Seek to Start <Kbd className="ml-1">0</Kbd></p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        style={{ boxShadow: 'none' }}
+                        onClick={seekBackward}
+                        disabled={!player}
+                        className="flex-1 font-normal"
+                    >
+                        -5 Secs
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                      <p>Seek Backward 5s <Kbd className="ml-1">←</Kbd></p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                  <Tooltip>
+                      <TooltipTrigger asChild>
+                          <Button
+                              variant="outline"
+                              size="sm"
+                              style={{ boxShadow: 'none' }}
+                              onClick={seekForward}
+                              disabled={!player}
+                              className="flex-1 font-normal"
+                          >
+                              +5 Secs
+                          </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                          <p>Seek Forward 5s <Kbd className="ml-1">→</Kbd></p>
+                      </TooltipContent>
+                  </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={() => {
+                      if (!player) return;
+                      if (isPlaying) {
+                        player.pauseVideo();
+                      } else {
+                        player.playVideo();
+                      }
+                    }}
+                    disabled={!player}
+                    className="w-full mt-0 font-normal"
+                    variant="outline"
+                    size="sm"
+                    style={{ boxShadow: 'none' }}
+                  >
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isPlaying ? 'Pause Video' : 'Play Video'} <Kbd className="ml-1"><Space className="h-3 w-3" /></Kbd></p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          <div className="space-y-1 flex-shrink-0">
+            <Label htmlFor="playback-speed-slider" className="text-xs font-normal text-muted-foreground">Misc.</Label>
             <Button
               onClick={handleCopyUrl}
               disabled={!videoId || sections.length === 0}
-              className="w-full mt-4"
+              className="w-full font-normal"
               variant="outline"
               size="sm"
               style={{ boxShadow: 'none' }}
             >
               {isUrlCopied ? 'Copied!' : 'Copy Shareable URL'}
             </Button>
+            <div className="block sm:hidden w-full flex justify-center pt-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="h-7 w-7"
+              >
+                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                <span className="sr-only">Toggle theme</span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -566,10 +682,9 @@ function Home() {
   )
 }
 
-// Helper function (ensure it's defined or imported)
 function formatTime(totalSeconds: number | null | undefined): string {
   if (totalSeconds === null || totalSeconds === undefined || isNaN(totalSeconds) || totalSeconds < 0) {
-    return '--:--'; // Display for placeholder/invalid
+    return '--:--';
   }
   totalSeconds = Math.max(0, totalSeconds);
   const minutes = Math.floor(totalSeconds / 60);

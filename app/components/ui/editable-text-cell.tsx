@@ -16,14 +16,12 @@ const EditableTextCell = React.forwardRef<HTMLInputElement, EditableTextCellProp
     const [currentValue, setCurrentValue] = React.useState<string>(value);
     const inputRef = React.useRef<HTMLInputElement>(null);
 
-    // Update internal state if external value changes (and not editing)
     React.useEffect(() => {
       if (!isEditing) {
         setCurrentValue(value);
       }
     }, [value, isEditing]);
 
-    // Focus input when editing starts
     React.useEffect(() => {
       if (isEditing && inputRef.current) {
         inputRef.current.focus();
@@ -54,7 +52,7 @@ const EditableTextCell = React.forwardRef<HTMLInputElement, EditableTextCellProp
       if (e.key === 'Enter') {
         saveChanges();
       } else if (e.key === 'Escape') {
-        setCurrentValue(value); // Revert display
+        setCurrentValue(value);
         setIsEditing(false);
       }
       if (onKeyDown) {
