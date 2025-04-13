@@ -348,6 +348,10 @@ function Home() {
            event.preventDefault();
            seekForward();
        }
+       else if (lowerKey === 'f') {
+           event.preventDefault();
+           toggleMirror();
+       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -355,7 +359,7 @@ function Home() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [player, sections, setActiveLoopSectionId, tempStartTime, setTempStartTime, playbackRate, setIsControlsVisible, toggleTheme]);
+  }, [player, sections, setActiveLoopSectionId, tempStartTime, setTempStartTime, playbackRate, setIsControlsVisible, toggleTheme, toggleMirror]);
 
   React.useEffect(() => {
     const containerElement = containerRef.current;
@@ -662,16 +666,25 @@ function Home() {
 
           <div className="space-y-1 flex-shrink-0">
             <Label htmlFor="playback-speed-slider" className="text-xs font-normal text-muted-foreground">Misc.</Label>
-            <Button
-              onClick={toggleMirror}
-              disabled={!videoId}
-              className="w-full font-normal"
-              variant={isMirrored ? "default" : "outline"}
-              size="sm"
-              style={{ boxShadow: 'none' }}
-            >
-              {isMirrored ? 'Unmirror Video' : 'Mirror Video'}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={toggleMirror}
+                    disabled={!videoId}
+                    className="w-full font-normal"
+                    variant={isMirrored ? "default" : "outline"}
+                    size="sm"
+                    style={{ boxShadow: 'none' }}
+                  >
+                    {isMirrored ? 'Unmirror Video' : 'Mirror Video'}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Toggle Video Mirroring <Kbd className="ml-1">F</Kbd></p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <Button
               onClick={handleCopyUrl}
               disabled={!videoId || sections.length === 0}
