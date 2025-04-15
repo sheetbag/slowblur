@@ -17,7 +17,11 @@ export const Route = createRootRoute({
       },
       {
         name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
+        content: 'width=device-width, initial-scale=1, viewport-fit=cover',
+      },
+      {
+        name: 'theme-color',
+        content: '#000000',
       },
       {
         title: 'SlowTube',

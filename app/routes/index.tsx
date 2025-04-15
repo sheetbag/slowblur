@@ -695,7 +695,7 @@ function Home() {
             >
               {isUrlCopied ? 'Copied!' : 'Copy Shareable URL'}
             </Button>
-            <div className="block sm:hidden w-full flex justify-center pt-4">
+            <div className="block sm:hidden w-full flex justify-center pt-4 pb-40">
               <Button
                 variant="ghost"
                 size="icon"
