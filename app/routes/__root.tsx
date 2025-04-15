@@ -21,13 +21,7 @@ export const Route = createRootRoute({
       },
       {
         name: 'theme-color',
-        content: '#ffffff',
-        id: 'theme-color-meta',
-      },
-      {
-        name: 'theme-color',
-        content: '#020817',
-        media: '(prefers-color-scheme: dark)',
+        content: '#000000',
       },
       {
         title: 'SlowTube',

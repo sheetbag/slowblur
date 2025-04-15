@@ -71,12 +71,6 @@ function Home() {
         root.classList.remove('light', 'dark');
         root.classList.add(theme);
         localStorage.setItem('theme', theme);
-
-        // Update theme-color meta tag
-        const themeColorMeta = document.getElementById('theme-color-meta') as HTMLMetaElement | null;
-        if (themeColorMeta) {
-          themeColorMeta.content = theme === 'dark' ? '#020817' : '#ffffff';
-        }
     }
   }, [theme]);
 
