@@ -71,6 +71,12 @@ function Home() {
         root.classList.remove('light', 'dark');
         root.classList.add(theme);
         localStorage.setItem('theme', theme);
+
+        // Update theme-color meta tag
+        const themeColorMeta = document.getElementById('theme-color-meta') as HTMLMetaElement | null;
+        if (themeColorMeta) {
+          themeColorMeta.content = theme === 'dark' ? '#020817' : '#ffffff';
+        }
     }
   }, [theme]);
 
@@ -695,7 +701,7 @@ function Home() {
             >
               {isUrlCopied ? 'Copied!' : 'Copy Shareable URL'}
             </Button>
-            <div className="block sm:hidden w-full flex justify-center pt-4">
+            <div className="block sm:hidden w-full flex justify-center pt-4 pb-40">
               <Button
                 variant="ghost"
                 size="icon"
